@@ -7,12 +7,14 @@ class DiscriminatorDCGAN(nn.Module):
 
     def __init__(self, config):
 
-        # TODO: Add to config first convolution filters number, e.g. first is 128, try to create a model specular to G
+        # TODO: Add to config first convolution filters number, e.g. first is 64
         # TODO: Add to config number of downsample steps
+
+        # TODO: Add dropout
 
         super(DiscriminatorDCGAN, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=config.input_channels, out_channels=128,
+        self.conv1 = nn.Conv2d(in_channels=config.input_channels, out_channels=64,
                                kernel_size=5, padding=2, stride=1, bias=False)
         self.conv2 = nn.Conv2d(in_channels=self.conv1.out_channels, out_channels=self.conv1.out_channels * 2,
                                kernel_size=5, padding=2, stride=1)
@@ -24,7 +26,7 @@ class DiscriminatorDCGAN(nn.Module):
         conv_number = 4
         self.min_map_size = int(config.image_size / math.pow(2, conv_number))
         print(f"Discriminator minimum map size: {self.min_map_size}")
-        dense_in_features = int(math.pow(self.min_map_size, 2)) * 1024  # 64 * int(math.pow(conv_number, 2))
+        dense_in_features = int(math.pow(self.min_map_size, 2)) * self.conv4.out_channels  # 64 * int(math.pow(conv_number, 2))
         self.dense = nn.Linear(in_features=dense_in_features, out_features=1, bias=False)
 
         self.bn1 = nn.BatchNorm2d(self.conv1.out_channels)
@@ -39,35 +41,35 @@ class DiscriminatorDCGAN(nn.Module):
 
     def forward(self, x):
 
-        # 128 x 64 x 64
+        # 64 x 64 x 64
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.activation(x)
-        # 128 x 32 x 32
+        # 64 x 32 x 32
         x = self.max_pool(x)
 
-        # 256 x 32 x 32
+        # 128 x 32 x 32
         x = self.conv2(x)
         x = self.bn2(x)
         x = self.activation(x)
-        # 256 x 16 x 16
+        # 128 x 16 x 16
         x = self.max_pool(x)
 
-        # 512 x 16 x 16
+        # 256 x 16 x 16
         x = self.conv3(x)
         x = self.bn3(x)
         x = self.activation(x)
-        # 512 x 8 x 8
+        # 256 x 8 x 8
         x = self.max_pool(x)
 
-        # 1024 x 8 x 8
+        # 512 x 8 x 8
         x = self.conv4(x)
         x = self.bn4(x)
         x = self.activation(x)
-        # 1024 x 4 x 4
+        # 512 x 4 x 4
         x = self.max_pool(x)
 
-        # flatten (1024 * 4 * 4)
+        # flatten (512 * 4 * 4)
         x = x.view(x.size(0), -1)
 
         # 1

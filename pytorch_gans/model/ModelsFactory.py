@@ -11,6 +11,8 @@ class ModelsFactory(object):
 
             return GeneratorDCGAN(config), DiscriminatorDCGAN(config)
 
+        # TODO: Create Generator with upsample + conv instead of conv transpose
+
         # elif config.architecture == "cdcgan":
         #
         #     return GeneratorCDCGAN(num_classes), DiscriminatorCDCGAN(num_classes)

@@ -97,6 +97,7 @@ def main():
         running_d_loss = 0.0
         running_d_real_loss = 0.0
         running_d_fake_loss = 0.0
+        running_g_loss = 0.0
 
         # Iterate on train batches and update weights using loss
         for batch_i, data in enumerate(train_loader):
@@ -105,40 +106,73 @@ def main():
             latents = torch.randn(len(data["image"]), config.zdim).to(device)
             g_out = G(latents)
 
-            # Discriminator prediction over real and fake images
+            ############ Discriminator update over real images
+
+            # Discriminator prediction over real images
             d_out_real = D(data["image"].to(device))
-            d_out_fake = D(g_out)
+
+            # zero the parameter (weight) gradients for discriminator
+            D.zero_grad()
 
             # calculate the loss between predicted and target class
             d_real_loss = criterion(d_out_real, torch.ones(size=(len(data["image"]), 1)).to(device))
-            d_fake_loss = criterion(d_out_real, torch.zeros(size=(len(data["image"]), 1)).to(device))
-
-            # zero the parameter (weight) gradients
-            optimizer_D.zero_grad()
 
             # backward pass to calculate the weight gradients
-            d_loss = 0.5 * d_real_loss + 0.5 * d_fake_loss
-            d_loss.backward()
+            d_real_loss.backward()
 
             # update D weights
             optimizer_D.step()
 
-            # print loss statistics
-            running_d_loss += d_loss.item()
+            ############ Discriminator update over fake images
+
+            # Discriminator prediction over fake images (detaching generator to avoid gradients propagation)
+            d_out_fake = D(g_out.detach())
+
+            # calculate the loss between predicted and target class
+            d_fake_loss = criterion(d_out_fake, torch.zeros(size=(len(data["image"]), 1)).to(device))
+
+            # backward pass to calculate the weight gradients
+            d_fake_loss.backward()
+
+            # update D weights
+            optimizer_D.step()
+
+            ############ Generator update
+
+            # zero the parameter (weight) gradients for generator
+            G.zero_grad()
+
+            # Discriminator over fake images another time keeping generator for gradients
+            d_out_fake_with_G = D(g_out)
+
+            # Calculate generator loss and gradients, we want discriminator output 1 for fake images
+            g_loss = criterion(d_out_fake_with_G, torch.ones(size=(len(data["image"]), 1)).to(device))
+
+            # backward pass to calculate the weight gradients
+            g_loss.backward()
+
+            # update G weights
+            optimizer_G.step()
+
+            ############ print loss statistics and output generated images
+
+            running_d_loss += running_d_real_loss * 0.5 + running_d_fake_loss * 0.5
             running_d_real_loss += d_real_loss.item()
             running_d_fake_loss += d_fake_loss.item()
+            running_g_loss += g_loss.item()
             if batch_i % 10 == 9:  # print every 10 batches
-                print('Epoch: {}, Batch: {}, Avg. Loss: {}, Avg Real Loss {}, Avg Fake Loss {}'
-                      .format(epoch + 1, batch_i + 1,
-                              running_d_loss / 10, running_d_real_loss / 10, running_d_fake_loss/10))
+                print(f"Epoch: {epoch + 1}, "
+                      f"Batch: {batch_i + 1}, "
+                      f"D Avg. Loss: {running_d_loss / 10}, "
+                      f"D Avg Real Loss {running_d_real_loss / 10}, "
+                      f"D Avg Fake Loss {running_d_fake_loss / 10}, "
+                      f"G Avg Loss {running_g_loss / 10}")
                 running_d_loss = 0.0
                 running_d_real_loss = 0.0
                 running_d_fake_loss = 0.0
+                running_g_loss = 0.0
 
         save_generated_images(validation_inputs, G, epoch, results_dir)
-
-
-
 
 
 if __name__ == "__main__":

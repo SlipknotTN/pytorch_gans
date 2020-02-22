@@ -23,32 +23,32 @@ class DiscriminatorDCGAN(nn.Module):
 
     def forward(self, x):
 
-        # 48 x 48 x 16
+        # 16 x 48 x 48
         x = self.conv1(x)
         x = self.relu(x)
 
-        # 24 x 24 x 16
+        # 16 x 24 x 24
         x = self.max_pool(x)
 
-        # 24 x 24 x 32
+        # 32 x 24 x 24
         x = self.conv2(x)
         x = self.relu(x)
 
-        # 12 x 12 x 32
+        # 32 x 12 x 12
         x = self.max_pool(x)
 
-        # 12 x 12 x 64
+        # 64 x 12 x 12
         x = self.conv3(x)
         x = self.relu(x)
 
-        # 6 x 6 x 64
+        # 64 x 6 x 6
         x = self.max_pool(x)
 
-        # flatten (6 * 6 * 64)
+        # flatten (64 * 6 * 6)
         x = x.view(x.size(0), -1)
 
-        logits = self.dense(x)
+        x = self.dense(x)
 
-        out = self.sigmoid(logits)
+        out = self.sigmoid(x)
 
-        return (out, logits)
+        return out

@@ -14,7 +14,7 @@ from pytorch_gans.model.ModelsFactory import ModelsFactory
 
 
 def save_generated_images(validation_inputs, G, epoch, results_dir):
-    # Save images generated at the end of the epoch, validation like
+    # Save images generated at the end of the epoch, validation like,
     gen_images_t = G(validation_inputs)
     gen_images = gen_images_t.cpu().data.numpy()
     # Rescale from -1 1 to 0 1
@@ -94,6 +94,7 @@ def main():
 
     for epoch in range(config.epochs):
 
+        G.train()
         running_d_loss = 0.0
         running_d_real_loss = 0.0
         running_d_fake_loss = 0.0
@@ -172,8 +173,14 @@ def main():
                 running_d_fake_loss = 0.0
                 running_g_loss = 0.0
 
+        # eval() to disable BN train mode
+        G.eval()
         save_generated_images(validation_inputs, G, epoch, results_dir)
 
+    # Save model
+    G.eval()
+    torch.save(G.state_dict(), os.path.join(args.model_output_dir, "G.pth"))
+    torch.save(D.state_dict(), os.path.join(args.model_output_dir, "D.pth"))
 
 if __name__ == "__main__":
     main()

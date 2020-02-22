@@ -9,21 +9,38 @@ class GeneratorDCGAN(nn.Module):
 
         super(GeneratorDCGAN, self).__init__()
 
-        # TODO: Add batchnorm usage to config
-        # TODO: Add leaky relu
+        # TODO: Add to config first/last filters, e.g. first is 1024
+        # TODO: Add to config number of upsample steps
+
+        # DCGAN: first feature map image_size / 2^4 (number of conv_t = 4),
+        # first dense 1024 channels, then conv1_t 512, conv2_t 256, conv3_t 128, conv4_t image_channels
         # TODO: Add dropout
+        # TODO: Calculate padding to support any image_size (e.g. for 48 probably we need to remove a layer,
+        # because 3 x 3 map is smaller than kernel)
 
-        out_features = int(math.pow(config.image_size / math.pow(2, 3), 2)) * 64
-        self.dense = nn.Linear(in_features=config.zdim, out_features=out_features)
+        conv_number = 4
+        self.min_map_size = int(config.image_size / math.pow(2, conv_number))
+        print(f"Generator minimum map size: {self.min_map_size}")
+        dense_out_features = int(math.pow(self.min_map_size, 2)) * 1024
+        self.dense = nn.Linear(in_features=config.zdim, out_features=dense_out_features, bias=False)
+        self.conv1_t = nn.ConvTranspose2d(in_channels=1024, out_channels=512,
+                                          kernel_size=4, padding=1, output_padding=0, stride=2, bias=False)
+        # Need to set kernel 5x5 from now on to keep dimensions
+        self.conv2_t = nn.ConvTranspose2d(in_channels=self.conv1_t.out_channels,
+                                          out_channels=self.conv1_t.out_channels//2,
+                                          kernel_size=5, padding=2, output_padding=1, stride=2, bias=False)
+        self.conv3_t = nn.ConvTranspose2d(in_channels=self.conv2_t.out_channels,
+                                          out_channels=self.conv2_t.out_channels//2,
+                                          kernel_size=5, padding=2, output_padding=1, stride=2, bias=False)
+        self.conv4_t = nn.ConvTranspose2d(in_channels=self.conv3_t.out_channels,
+                                          out_channels=config.input_channels,
+                                          kernel_size=5, padding=2, output_padding=1, stride=2, bias=False)
 
-        self.conv1_t = nn.ConvTranspose2d(in_channels=64, out_channels=32,
-                                          kernel_size=3, padding=1, output_padding=1, stride=2)
-        self.conv2_t = nn.ConvTranspose2d(in_channels=self.conv1_t.out_channels, out_channels=16,
-                                          kernel_size=3, padding=1, output_padding=1, stride=2)
-        self.conv3_t = nn.ConvTranspose2d(in_channels=self.conv2_t.out_channels, out_channels=config.input_channels,
-                                          kernel_size=3, padding=1, output_padding=1, stride=2)
-
-        self.relu = nn.ReLU()
+        self.bn_d = nn.BatchNorm1d(self.dense.out_features)
+        self.bn1 = nn.BatchNorm2d(self.conv1_t.out_channels)
+        self.bn2 = nn.BatchNorm2d(self.conv2_t.out_channels)
+        self.bn3 = nn.BatchNorm2d(self.conv3_t.out_channels)
+        self.activation = nn.LeakyReLU(negative_slope=0.2)
 
         # TODO: Add config/model architecture to use upsample to conv2d kernel 1x1
         # self.upsample = nn.UpsamplingNearest2d(scale_factor=2)
@@ -31,24 +48,33 @@ class GeneratorDCGAN(nn.Module):
         self.tanh = nn.Tanh()
 
     def forward(self, x):
-
-        # (64 * 6 * 6) flattened
+        # If image shape to generate is 1 x 48 x 48, first map size is 3 x 3
+        # If image shape to generate is 1 x 64 x 64, first map size is 4 x 4
+        # (1024 * 4 * 4) flattened
         x = self.dense(x)
-        x = self.relu(x)
+        x = self.bn_d(x)
+        x = self.activation(x)
 
-        # TODO: Avoid hardcoded numbers, set 64 from config or set upsampling steps and G starting / D final filters
-        x = x.view(x.size(0), 64, 6, 6)
+        # Reshape to 1024 x 4 x 4
+        x = x.view(x.size(0), 1024, self.min_map_size, self.min_map_size)
 
-        # 32 x 12 x 12
+        # 512 x 8 x 8
         x = self.conv1_t(x)
-        x = self.relu(x)
+        x = self.bn1(x)
+        x = self.activation(x)
 
-        # 16 x 24 x 24
+        # 256 x 16 x 16
         x = self.conv2_t(x)
-        x = self.relu(x)
+        x = self.bn2(x)
+        x = self.activation(x)
 
-        # input_channels x 48 x 48
+        # 128 x 32 x 32
         x = self.conv3_t(x)
+        x = self.bn3(x)
+        x = self.activation(x)
+
+        # input_channels x 64 x 64
+        x = self.conv4_t(x)
 
         out = self.tanh(x)
 

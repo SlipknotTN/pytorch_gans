@@ -1,5 +1,9 @@
 import argparse
+import os
 
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
 from torch import nn, optim
 from torch.utils.data.dataloader import DataLoader
 
@@ -8,12 +12,35 @@ from pytorch_gans.data.Preprocessing import Preprocessing
 from pytorch_gans.data.StandardDataset import StandardDataset
 from pytorch_gans.model.ModelsFactory import ModelsFactory
 
+
+def save_generated_images(validation_inputs, G, epoch, results_dir):
+    # Save images generated at the end of the epoch, validation like
+    gen_images_t = G(validation_inputs)
+    gen_images = gen_images_t.cpu().data.numpy()
+    # Rescale from -1 1 to 0 1
+    gen_images = (gen_images + 1.0) / 2.0
+    # From NCHW to NHWC
+    gen_images = np.transpose(gen_images, (0, 2, 3, 1))
+    # TODO: Calculate r using validation inputs size
+    r = 4
+    c = 8
+    fig, axs = plt.subplots(r, c)
+    cnt = 0
+    for i in range(r):
+        for j in range(c):
+            axs[i, j].imshow(gen_images[cnt, :, :, 0], cmap='gray')
+            axs[i, j].axis('off')
+            cnt += 1
+    fig.savefig(results_dir + "/genimages_%d.png" % epoch)
+    plt.close()
+
+
 def do_parsing():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--dataset_train_dir", required=True, type=str, help="Dataset train directory")
     parser.add_argument("--dataset_val_dir", required=True, type=str, help="Dataset validation directory")
     parser.add_argument("--config_file", required=True, type=str, help="Config file path")
-    parser.add_argument("--model_output_dir", required=False, type=str, default="./export/model.pth",
+    parser.add_argument("--model_output_dir", required=True, type=str,
                         help="Directory where to save G and D models")
     parser.add_argument("--single_dir_dataset", action="store_true", help="If dataset not includes classes subdirs")
     args = parser.parse_args()
@@ -33,6 +60,8 @@ def main():
     preprocessing_transforms_val = preprocessing_transforms.get_transforms_val()
 
     # Read Dataset
+    classes = sorted(next(os.walk(args.dataset_train_dir))[1])
+    print(f"Classes: {classes}")
     dataset_train = StandardDataset(args.dataset_train_dir, preprocessing_transforms_train)
     print("Train - Classes: {0}, Samples: {1}".format(str(len(dataset_train.get_classes())), str(len(dataset_train))))
     dataset_val = StandardDataset(args.dataset_val_dir, preprocessing_transforms_val)
@@ -42,6 +71,7 @@ def main():
 
     # Load model and apply .train() and .cuda()
     G, D = ModelsFactory.create(config, len(dataset_train.get_classes()))
+    device = torch.device("cuda:0")
     print(G)
     print(D)
     G.cuda()
@@ -49,13 +79,67 @@ def main():
     D.cuda()
     D.train()
 
+    results_dir = os.path.join(args.model_output_dir, "results")
+    os.makedirs(results_dir, exist_ok=True)
+
     # Create a PyTorch DataLoader from CatDogDataset (two of them: train + val)
     train_loader = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=8)
+    # Validation not used typically
     val_loader = DataLoader(dataset_val, batch_size=config.batch_size, shuffle=False, num_workers=8)
+    validation_inputs = torch.randn(config.batch_size, config.zdim).to(device)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCELoss()
     optimizer_G = optim.Adam(G.parameters(), lr=config.learning_rate, betas=(config.beta1, 0.999))
     optimizer_D = optim.Adam(D.parameters(), lr=config.learning_rate, betas=(config.beta1, 0.999))
+
+    for epoch in range(config.epochs):
+
+        running_d_loss = 0.0
+        running_d_real_loss = 0.0
+        running_d_fake_loss = 0.0
+
+        # Iterate on train batches and update weights using loss
+        for batch_i, data in enumerate(train_loader):
+
+            # Batch of generator images
+            latents = torch.randn(len(data["image"]), config.zdim).to(device)
+            g_out = G(latents)
+
+            # Discriminator prediction over real and fake images
+            d_out_real = D(data["image"].to(device))
+            d_out_fake = D(g_out)
+
+            # calculate the loss between predicted and target class
+            d_real_loss = criterion(d_out_real, torch.ones(size=(len(data["image"]), 1)).to(device))
+            d_fake_loss = criterion(d_out_real, torch.zeros(size=(len(data["image"]), 1)).to(device))
+
+            # zero the parameter (weight) gradients
+            optimizer_D.zero_grad()
+
+            # backward pass to calculate the weight gradients
+            d_loss = 0.5 * d_real_loss + 0.5 * d_fake_loss
+            d_loss.backward()
+
+            # update D weights
+            optimizer_D.step()
+
+            # print loss statistics
+            running_d_loss += d_loss.item()
+            running_d_real_loss += d_real_loss.item()
+            running_d_fake_loss += d_fake_loss.item()
+            if batch_i % 10 == 9:  # print every 10 batches
+                print('Epoch: {}, Batch: {}, Avg. Loss: {}, Avg Real Loss {}, Avg Fake Loss {}'
+                      .format(epoch + 1, batch_i + 1,
+                              running_d_loss / 10, running_d_real_loss / 10, running_d_fake_loss/10))
+                running_d_loss = 0.0
+                running_d_real_loss = 0.0
+                running_d_fake_loss = 0.0
+
+        save_generated_images(validation_inputs, G, epoch, results_dir)
+
+
+
+
 
 if __name__ == "__main__":
     main()

@@ -1,9 +1,12 @@
 DCGAN PyTorch official tutorial: https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
 (they don't use DCGAN filters size)
 
+FacebookResearch DCGAN (to check shapes): https://pytorch.org/hub/facebookresearch_pytorch-gan-zoo_dcgan/
+
 DCGAN TensorFlow official tutorial: https://www.tensorflow.org/tutorials/generative/dcgan
 
 Using these shapes: http://www.timzhangyuxuan.com/project_dcgan/
+
 
 Interesting insights:
 - DCGAN architecture. D starting with 128 filters: G loss 0.0, D doesn't learn, always answer real.

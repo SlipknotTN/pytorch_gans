@@ -7,16 +7,24 @@ class ModelsFactory(object):
     @classmethod
     def create(cls, config, num_classes):
 
-        if config.architecture == "dcgan":
+        generator = None
+        discriminator = None
 
-            return GeneratorDCGAN(config), DiscriminatorDCGAN(config)
+        if config.g_architecture == "dcgan":
 
-        # TODO: Create Generator with upsample + conv instead of conv transpose
-
-        # elif config.architecture == "cdcgan":
-        #
-        #     return GeneratorCDCGAN(num_classes), DiscriminatorCDCGAN(num_classes)
+            # TODO: Create Generator with upsample + conv instead of conv transpose
+            generator = GeneratorDCGAN(config)
 
         else:
 
-            raise Exception("Model architecture " + config.architecture + " not supported")
+            raise Exception("Generator model architecture " + config.g_architecture + " not supported")
+
+        if config.g_architecture == "dcgan":
+
+            discriminator = DiscriminatorDCGAN(config)
+
+        else:
+
+            raise Exception("Discriminator model architecture " + config.d_architecture + " not supported")
+
+        return generator, discriminator

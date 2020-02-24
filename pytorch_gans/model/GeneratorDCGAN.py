@@ -6,11 +6,11 @@ import torch.nn as nn
 
 class ConvTransposeBlock(nn.Module):
 
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, k_size=5, padding=2, out_padding=1):
         super(ConvTransposeBlock, self).__init__()
         self.conv = nn.ConvTranspose2d(in_channels=in_channels,
                                out_channels=out_channels,
-                               kernel_size=5, padding=2, output_padding=1, stride=2, bias=False)
+                               kernel_size=k_size, padding=padding, output_padding=out_padding, stride=2, bias=False)
         self.bn = nn.BatchNorm2d(out_channels)
         self.activation = nn.LeakyReLU(negative_slope=0.2)
 
@@ -42,22 +42,27 @@ class GeneratorDCGAN(nn.Module):
         self.bn_d = nn.BatchNorm1d(self.dense.out_features)
         self.activation = nn.LeakyReLU(negative_slope=0.2)
 
+        self.g_initial_filters = config.g_initial_filters
+
         # Init transpose convolutional blocks
-        # FIXME: Manage first kernel size, when feature map is smaller than kernel size
         convs_blocks_dict = OrderedDict()
-        in_channels = config.input_channels
-        out_channels = config.d_initial_filters
-        for i in range(conv_number):
-            convs_blocks_dict[f"block{i+1}"] = ConvTransposeBlock(in_channels=in_channels, out_channels=out_channels)
+        in_channels = config.g_initial_filters
+        out_channels = in_channels // 2
+        for i in range(conv_number - 1):
+            # Manage first kernel size, when feature map is smaller than kernel size
+            conv_t_block = ConvTransposeBlock(in_channels=in_channels, out_channels=out_channels) if i > 0 \
+                else ConvTransposeBlock(in_channels=in_channels, out_channels=out_channels,
+                                        k_size=4, padding=1, out_padding=0)
+            convs_blocks_dict[f"block{i+1}"] = conv_t_block
             in_channels = out_channels
-            out_channels *= 2
+            out_channels //= 2
 
         # Convolution transpose blocks as a single sequential model
         self.conv_t_blocks = nn.Sequential(convs_blocks_dict)
-
-        self.conv_last = nn.ConvTranspose2d(in_channels=in_channels,
-                                            out_channels=config.input_channels,
-                                            kernel_size=5, padding=2, output_padding=1, stride=2, bias=False)
+        # Last convolutional block to create image
+        self.conv_last_t = nn.ConvTranspose2d(in_channels=in_channels,
+                                              out_channels=config.input_channels,
+                                              kernel_size=5, padding=2, output_padding=1, stride=2, bias=False)
 
         # TODO: Add config/model architecture to use upsample to conv2d kernel 1x1
         # self.upsample = nn.UpsamplingNearest2d(scale_factor=2)
@@ -72,7 +77,7 @@ class GeneratorDCGAN(nn.Module):
         x = self.activation(x)
 
         # Reshape to 1024 x 4 x 4
-        x = x.view(x.size(0), 1024, self.min_map_size, self.min_map_size)
+        x = x.view(x.size(0), self.g_initial_filters, self.min_map_size, self.min_map_size)
 
         # Every block resolution is doubled (default, starting with 1024 dense out filters)
         x = self.conv_t_blocks(x)

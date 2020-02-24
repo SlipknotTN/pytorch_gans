@@ -178,6 +178,8 @@ def main():
         save_generated_images(validation_inputs, G, epoch, results_dir)
 
     # Save model
+    # TODO: Save checkpoints
+    # TODO: Save architecture log
     G.eval()
     torch.save(G.state_dict(), os.path.join(args.model_output_dir, "G.pth"))
     torch.save(D.state_dict(), os.path.join(args.model_output_dir, "D.pth"))

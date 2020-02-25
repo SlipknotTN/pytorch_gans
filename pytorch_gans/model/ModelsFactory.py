@@ -1,5 +1,6 @@
-from model.GeneratorDCGAN import GeneratorDCGAN
-from model.DiscriminatorDCGAN import DiscriminatorDCGAN
+from pytorch_gans.model.GeneratorDCGAN import GeneratorDCGAN
+from pytorch_gans.model.DiscriminatorDCGAN import DiscriminatorDCGAN
+from pytorch_gans.model.GeneratorDCGAN_Upsample import GeneratorDCGAN_Upsample
 
 
 class ModelsFactory(object):
@@ -12,14 +13,17 @@ class ModelsFactory(object):
 
         if config.g_architecture == "dcgan":
 
-            # TODO: Create Generator with upsample + conv instead of conv transpose
             generator = GeneratorDCGAN(config)
+
+        elif config.g_architecture == "dcgan_upsample":
+
+            generator = GeneratorDCGAN_Upsample(config)
 
         else:
 
             raise Exception("Generator model architecture " + config.g_architecture + " not supported")
 
-        if config.g_architecture == "dcgan":
+        if config.d_architecture == "dcgan":
 
             discriminator = DiscriminatorDCGAN(config)
 

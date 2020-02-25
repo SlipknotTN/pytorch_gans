@@ -25,10 +25,14 @@ def save_generated_images(validation_inputs, G, epoch, results_dir):
     r = 4
     c = 8
     fig, axs = plt.subplots(r, c)
+    cmap = None
+    # FIXME: Fix color when image is RGB
+    if gen_images.shape[-1] == 1:
+        cmap = "gray"
     cnt = 0
     for i in range(r):
         for j in range(c):
-            axs[i, j].imshow(gen_images[cnt, :, :, 0], cmap='gray')
+            axs[i, j].imshow(gen_images[cnt, :, :, 0], cmap=cmap)
             axs[i, j].axis('off')
             cnt += 1
     fig.savefig(results_dir + f"/genimages_{epoch + 1}.png")

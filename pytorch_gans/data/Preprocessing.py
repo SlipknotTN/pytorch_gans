@@ -10,13 +10,13 @@ class Preprocessing(object):
         if config.input_channels == 3:
             # ToTensor converts HWC PIL.Image to CHW float tensor.
             self.data_transform_train = transforms.Compose([
-                transforms.Resize(config.image_size),
+                transforms.Resize((config.image_size, config.image_size)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[1.0, 1.0, 1.0])
             ])
 
             self.data_transform_val = transforms.Compose([
-                transforms.Resize((config.image_size)),
+                transforms.Resize((config.image_size, config.image_size)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[1.0, 1.0, 1.0])
             ])
@@ -25,14 +25,14 @@ class Preprocessing(object):
 
             self.data_transform_train = transforms.Compose([
                 transforms.Grayscale(num_output_channels=1),
-                transforms.Resize(config.image_size),
+                transforms.Resize((config.image_size, config.image_size)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5], std=[1.0])
             ])
 
             self.data_transform_val = transforms.Compose([
                 transforms.Grayscale(num_output_channels=1),
-                transforms.Resize(config.image_size),
+                transforms.Resize((config.image_size, config.image_size)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5], std=[1.0])
             ])

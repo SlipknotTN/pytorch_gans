@@ -31,14 +31,13 @@ def save_generated_images(validation_inputs, G, epoch, results_dir):
             axs[i, j].imshow(gen_images[cnt, :, :, 0], cmap='gray')
             axs[i, j].axis('off')
             cnt += 1
-    fig.savefig(results_dir + "/genimages_%d.png" % epoch)
+    fig.savefig(results_dir + f"/genimages_{epoch + 1}.png")
     plt.close()
 
 
 def do_parsing():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--dataset_train_dir", required=True, type=str, help="Dataset train directory")
-    parser.add_argument("--dataset_val_dir", required=True, type=str, help="Dataset validation directory")
+    parser.add_argument("--dataset_dir", required=True, type=str, help="Dataset directory")
     parser.add_argument("--config_file", required=True, type=str, help="Config file path")
     parser.add_argument("--model_output_dir", required=True, type=str,
                         help="Directory where to save G and D models")
@@ -57,20 +56,15 @@ def main():
     # Prepare preprocessing transform pipeline
     preprocessing_transforms = Preprocessing(config)
     preprocessing_transforms_train = preprocessing_transforms.get_transforms_train()
-    preprocessing_transforms_val = preprocessing_transforms.get_transforms_val()
 
     # Read Dataset
-    classes = sorted(next(os.walk(args.dataset_train_dir))[1])
+    classes = sorted(next(os.walk(args.dataset_dir))[1])
     print(f"Classes: {classes}")
-    dataset_train = StandardDataset(args.dataset_train_dir, preprocessing_transforms_train)
-    print("Train - Classes: {0}, Samples: {1}".format(str(len(dataset_train.get_classes())), str(len(dataset_train))))
-    dataset_val = StandardDataset(args.dataset_val_dir, preprocessing_transforms_val)
-    print("Validation - Classes: {0}, Samples: {1}".
-          format(str(len(dataset_val.get_classes())), str(len(dataset_val))))
-    print("Classes " + str(dataset_train.get_classes()))
+    dataset = StandardDataset(args.dataset_dir, preprocessing_transforms_train)
+    print("Dataset - Classes: {0}, Samples: {1}".format(str(len(dataset.get_classes())), str(len(dataset))))
 
     # Load model and apply .train() and .cuda()
-    G, D = ModelsFactory.create(config, len(dataset_train.get_classes()))
+    G, D = ModelsFactory.create(config, len(dataset.get_classes()))
     device = torch.device("cuda:0")
     print(G)
     print(D)
@@ -83,9 +77,7 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     # Create a PyTorch DataLoader from CatDogDataset (two of them: train + val)
-    train_loader = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=8)
-    # Validation not used typically
-    val_loader = DataLoader(dataset_val, batch_size=config.batch_size, shuffle=False, num_workers=8)
+    train_loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True, num_workers=8)
     validation_inputs = torch.randn(config.batch_size, config.zdim).to(device)
 
     criterion = nn.BCELoss()
@@ -174,15 +166,16 @@ def main():
                 running_g_loss = 0.0
 
         # eval() to disable BN train mode
-        G.eval()
-        save_generated_images(validation_inputs, G, epoch, results_dir)
+        if epoch % 10 == 9:
+            G.eval()
+            save_generated_images(validation_inputs, G, epoch, results_dir)
 
-    # Save model
-    # TODO: Save checkpoints
-    # TODO: Save architecture log
-    G.eval()
-    torch.save(G.state_dict(), os.path.join(args.model_output_dir, "G.pth"))
-    torch.save(D.state_dict(), os.path.join(args.model_output_dir, "D.pth"))
+            # Save model
+            # TODO: Save architecture log
+            G.eval()
+            torch.save(G.state_dict(), os.path.join(args.model_output_dir, f"G_{epoch + 1}.pth"))
+            torch.save(D.state_dict(), os.path.join(args.model_output_dir, f"D_{epoch + 1}.pth"))
+
 
 if __name__ == "__main__":
     main()

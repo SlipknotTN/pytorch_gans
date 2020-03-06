@@ -1,5 +1,6 @@
 import argparse
 import os
+from shutil import copy
 
 import numpy as np
 import torch
@@ -43,6 +44,7 @@ def main():
     print("Dataset - Classes: {0}, Samples: {1}".format(str(len(dataset.get_classes())), str(len(dataset))))
 
     # Load model and apply .train() and .cuda()
+    # TODO: Try different ways to attach class indexes
     G, D = ModelsFactory.create(config, len(dataset.get_classes()))
     device = torch.device("cuda:0")
     print(G)
@@ -54,6 +56,8 @@ def main():
 
     results_dir = os.path.join(args.model_output_dir, "results")
     os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(os.path.join(args.model_output_dir, "chkpt"), exist_ok=True)
+    copy(args.config_file, os.path.join(args.model_output_dir, os.path.basename(args.config_file)))
 
     # Create a PyTorch DataLoader from CatDogDataset (two of them: train + val)
     train_loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True, num_workers=8)
@@ -161,8 +165,8 @@ def main():
             # Save model
             # TODO: Save architecture log
             G.eval()
-            torch.save(G.state_dict(), os.path.join(args.model_output_dir, f"G_{epoch + 1}.pth"))
-            torch.save(D.state_dict(), os.path.join(args.model_output_dir, f"D_{epoch + 1}.pth"))
+            torch.save(G.state_dict(), os.path.join(args.model_output_dir, "chkpt", f"G_{epoch + 1}.pth"))
+            torch.save(D.state_dict(), os.path.join(args.model_output_dir, "chkpt", f"D_{epoch + 1}.pth"))
 
 
 if __name__ == "__main__":

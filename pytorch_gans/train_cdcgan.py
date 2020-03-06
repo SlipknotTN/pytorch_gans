@@ -151,7 +151,7 @@ def main():
                 running_g_loss = 0.0
 
         # eval() to disable BN train mode
-        if epoch % 10 == 9:
+        if (epoch + 1) % 5 == 0:
             G.eval()
             # Save images generated at the end of the epoch, validation like
             gen_images_t = G(validation_inputs_z, validation_inputs_classes)

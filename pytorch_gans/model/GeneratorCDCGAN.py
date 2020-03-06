@@ -1,6 +1,7 @@
 import math
 from collections import OrderedDict
 
+import torch
 import torch.nn as nn
 
 
@@ -22,11 +23,11 @@ class ConvTransposeBlock(nn.Module):
         return x
 
 
-class GeneratorDCGAN(nn.Module):
+class GeneratorCDCGAN(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, num_classes ):
 
-        super(GeneratorDCGAN, self).__init__()
+        super(GeneratorCDCGAN, self).__init__()
 
         # DCGAN: first feature map image_size / 2^number of conv_t,
         # Selecting 4 upsample steps and 1024 initial filters, these are the number of channels
@@ -44,11 +45,20 @@ class GeneratorDCGAN(nn.Module):
         self.bn_d = nn.BatchNorm1d(self.dense.out_features)
         self.activation = nn.LeakyReLU(negative_slope=0.2)
 
+        # Class input management
+        # See this as reference: https://3qeqpr26caki16dnhd19sv6by6v-wpengine.netdna-ssl.com/wp-content/uploads/2019/05/Plot-of-the-Generator-Model-in-the-Conditional-Generative-Adversarial-Network-806x1024.png
+        self.embedding = nn.Embedding(num_classes, config.embedding_size)
+        # Dense to initial 2D map, only one channel
+        self.class_dense = nn.Linear(in_features=config.embedding_size,
+                                     out_features=self.min_map_size * self.min_map_size * 1,
+                                     bias=False)
+
         self.g_initial_filters = config.g_initial_filters
 
         # Init transpose convolutional blocks
         convs_blocks_dict = OrderedDict()
-        in_channels = config.g_initial_filters
+        # we add one channel for the class input branch
+        in_channels = config.g_initial_filters + 1
         out_channels = in_channels // 2
         for i in range(conv_number - 1):
             # Manage first kernel size, when feature map is smaller than kernel size
@@ -68,15 +78,26 @@ class GeneratorDCGAN(nn.Module):
 
         self.output = nn.Tanh()
 
-    def forward(self, x):
+    def forward(self, z, class_indexes):
+
+        # Process class_idx
+        y = self.embedding(class_indexes)
+        y = self.class_dense(y)
+        y = nn.ReLU()(y)
+        # Reshape to the same initial map shape (forcing 1 channel)
+        y = y.view(-1, 1, self.min_map_size, self.min_map_size)
+
         # If image shape to generate is 1 x 64 x 64, first map size is 4 x 4
         # (1024 * 4 * 4) flattened
-        x = self.dense(x)
+        x = self.dense(z)
         x = self.bn_d(x)
         x = self.activation(x)
 
         # Reshape to 1024 x 4 x 4
         x = x.view(x.size(0), self.g_initial_filters, self.min_map_size, self.min_map_size)
+
+        # Concatenate z branch with class input branch
+        x = torch.cat((x, y), 1)
 
         # Every block resolution is doubled (default, starting with 1024 dense out filters)
         x = self.conv_t_blocks(x)

@@ -1,7 +1,6 @@
 import argparse
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import nn, optim
@@ -11,34 +10,7 @@ from pytorch_gans.config.ConfigParams import ConfigParams
 from pytorch_gans.data.Preprocessing import Preprocessing
 from pytorch_gans.data.StandardDataset import StandardDataset
 from pytorch_gans.model.ModelsFactory import ModelsFactory
-
-
-def save_generated_images(validation_inputs, G, epoch, results_dir):
-    # Save images generated at the end of the epoch, validation like,
-    gen_images_t = G(validation_inputs)
-    gen_images = gen_images_t.cpu().data.numpy()
-    # Rescale from -1 1 to 0 1
-    gen_images = (gen_images + 1.0) / 2.0
-    # From NCHW to NHWC
-    gen_images = np.transpose(gen_images, (0, 2, 3, 1))
-    # Calculate r using validation inputs size
-    c = min(8, validation_inputs.shape[0])
-    r = validation_inputs.shape[0] // c + int(bool(validation_inputs.shape[0] % c))
-    fig, axs = plt.subplots(r, c)
-    cmap = None
-    if gen_images.shape[-1] == 1:
-        cmap = "gray"
-    cnt = 0
-    for i in range(r):
-        for j in range(c):
-            if gen_images.shape[-1] == 1:
-                axs[i, j].imshow(gen_images[cnt, :, :, 0], cmap=cmap)
-            else:
-                axs[i, j].imshow(gen_images[cnt, :, :, :], cmap=cmap)
-            axs[i, j].axis('off')
-            cnt += 1
-    fig.savefig(results_dir + f"/genimages_{epoch + 1}.png")
-    plt.close()
+from pytorch_gans.utils.draw import save_generated_images
 
 
 def do_parsing():
@@ -85,7 +57,11 @@ def main():
 
     # Create a PyTorch DataLoader from CatDogDataset (two of them: train + val)
     train_loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True, num_workers=8)
-    validation_inputs = torch.randn(config.batch_size, config.zdim).to(device)
+    validation_inputs_z = torch.randn(config.batch_size, config.zdim).to(device)
+    # Create class input replicating labels if len(classes) < config.batch_size, otherwise truncate them
+    full_class_indexes = np.array(range(0, len(classes)))
+    full_class_indexes_rep = np.tile(full_class_indexes, (config.batch_size // len(full_class_indexes) + 1))[:config.batch_size]
+    validation_inputs_classes = torch.from_numpy(full_class_indexes_rep).to(device)
 
     criterion = nn.BCELoss()
     optimizer_G = optim.Adam(G.parameters(), lr=config.learning_rate, betas=(config.beta1, 0.999))
@@ -104,12 +80,14 @@ def main():
 
             # Batch of generator images
             latents = torch.randn(len(data["image"]), config.zdim).to(device)
-            g_out = G(latents)
+            # Generate random class indices
+            class_indexes = torch.randint(low=0, high=len(classes), size=(len(data["image"]),)).to(device)
+            g_out = G(latents, class_indexes)
 
             ############ Discriminator update over real images
 
-            # Discriminator prediction over real images
-            d_out_real = D(data["image"].to(device))
+            # Discriminator prediction over real images with the correct class
+            d_out_real = D(data["image"].to(device), data["gt"].to(device))
 
             # zero the parameter (weight) gradients for discriminator
             D.zero_grad()
@@ -126,7 +104,7 @@ def main():
             ############ Discriminator update over fake images
 
             # Discriminator prediction over fake images (detaching generator to avoid gradients propagation)
-            d_out_fake = D(g_out.detach())
+            d_out_fake = D(g_out.detach(), class_indexes)
 
             # calculate the loss between predicted and target class
             d_fake_loss = criterion(d_out_fake, torch.zeros(size=(len(data["image"]), 1)).to(device))
@@ -143,7 +121,7 @@ def main():
             G.zero_grad()
 
             # Discriminator over fake images another time keeping generator for gradients
-            d_out_fake_with_G = D(g_out)
+            d_out_fake_with_G = D(g_out, class_indexes)
 
             # Calculate generator loss and gradients, we want discriminator output 1 for fake images
             g_loss = criterion(d_out_fake_with_G, torch.ones(size=(len(data["image"]), 1)).to(device))
@@ -175,7 +153,10 @@ def main():
         # eval() to disable BN train mode
         if epoch % 10 == 9:
             G.eval()
-            save_generated_images(validation_inputs, G, epoch, results_dir)
+            # Save images generated at the end of the epoch, validation like
+            gen_images_t = G(validation_inputs_z, validation_inputs_classes)
+            gen_images = gen_images_t.cpu().data.numpy()
+            save_generated_images(gen_images, epoch, results_dir)
 
             # Save model
             # TODO: Save architecture log

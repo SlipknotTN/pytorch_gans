@@ -18,6 +18,8 @@ class ConfigParams(object):
         self.g_architecture = config.get(Const.ConfigSection.model, "g_architecture")
         self.g_initial_filters = config.getint(Const.ConfigSection.model, "g_initial_filters")
         self.g_resize_steps = config.getint(Const.ConfigSection.model, "g_resize_steps")
+        if self.g_architecture.startswith("cdcgan"):
+            self.embedding_size = config.getint(Const.ConfigSection.model, "embedding_size")
         # Discriminator
         self.d_architecture = config.get(Const.ConfigSection.model, "d_architecture")
         self.d_initial_filters = config.getint(Const.ConfigSection.model, "d_initial_filters")

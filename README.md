@@ -15,4 +15,5 @@ Interesting insights about DCGAN:
 
 Interesting insights about Conditional DCGAN:
 - Starting with 1024 G channels doesn't work at all, D loss nearly 0.
-- Starting with 128 G channels starts to work, again a simpler G is better for D, but it collapse easily (D loss nearly 0)
+- Starting with 128 G channels starts to work, again a simpler G is better for D. 
+Image quality is much worse than unconditional version.

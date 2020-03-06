@@ -21,18 +21,20 @@ def save_generated_images(validation_inputs, G, epoch, results_dir):
     gen_images = (gen_images + 1.0) / 2.0
     # From NCHW to NHWC
     gen_images = np.transpose(gen_images, (0, 2, 3, 1))
-    # TODO: Calculate r using validation inputs size
-    r = 4
-    c = 8
+    # Calculate r using validation inputs size
+    c = min(8, validation_inputs.shape[0])
+    r = validation_inputs.shape[0] // c + int(bool(validation_inputs.shape[0] % c))
     fig, axs = plt.subplots(r, c)
     cmap = None
-    # FIXME: Fix color when image is RGB
     if gen_images.shape[-1] == 1:
         cmap = "gray"
     cnt = 0
     for i in range(r):
         for j in range(c):
-            axs[i, j].imshow(gen_images[cnt, :, :, 0], cmap=cmap)
+            if gen_images.shape[-1] == 1:
+                axs[i, j].imshow(gen_images[cnt, :, :, 0], cmap=cmap)
+            else:
+                axs[i, j].imshow(gen_images[cnt, :, :, :], cmap=cmap)
             axs[i, j].axis('off')
             cnt += 1
     fig.savefig(results_dir + f"/genimages_{epoch + 1}.png")
@@ -62,6 +64,7 @@ def main():
     preprocessing_transforms_train = preprocessing_transforms.get_transforms_train()
 
     # Read Dataset
+    assert os.path.exists(args.dataset_dir), f"Dataset dir {args.dataset_dir} does not exists"
     classes = sorted(next(os.walk(args.dataset_dir))[1])
     print(f"Classes: {classes}")
     dataset = StandardDataset(args.dataset_dir, preprocessing_transforms_train)
